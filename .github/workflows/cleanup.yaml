@@ -1,0 +1,37 @@
+name: Delete Old Branches
+
+on:
+  schedule:
+    - cron: '0 2 * * 0'   # Runs every Sunday at 2 AM UTC
+  workflow_dispatch:       # Allows manual trigger
+
+jobs:
+  clean-old-branches:
+    runs-on: self-hosted
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure Git for API
+        run: |
+          git config --global user.email "siri1459@gmail.com"
+          git config --global user.name "sirisha"
+
+      - name: Delete branches older than 60 days
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          DAYS=60
+          # Fetch all remote branches
+          git fetch --all
+          # List all remote branches except main/master
+          for branch in $(git for-each-ref --format '%(refname:short) %(committerdate:unix)' refs/remotes/origin/ | grep -v 'origin/main' | grep -v 'origin/master'); do
+            bname=$(echo $branch | awk '{print $1}' | sed 's|origin/||')
+            bdate=$(echo $branch | awk '{print $2}')
+            now=$(date +%s)
+            age=$(( (now - bdate) / 86400 ))
+            if [ $age -gt $DAYS ]; then
+              echo "Deleting branch $bname (age: $age days)"
+              gh api -X DELETE repos/${{ github.repository }}/git/refs/heads/$bname
+            fi
+          done
